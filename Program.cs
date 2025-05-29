@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace lookupSID
 {
@@ -10,6 +11,11 @@ namespace lookupSID
     {
         private static void echo (object str) => Console.WriteLine(str);
         private static void read () => Console.ReadLine();
+
+
+        private static bool mode;
+
+
 
         private static void DisplayUpdate(List<object[]> items)
         {
@@ -30,7 +36,7 @@ namespace lookupSID
         private static object[] DecodeArray(byte[] sidbase, byte[] bytesToDecode)
         {
             var ret = new object[] { BitConverter.ToString(bytesToDecode).Replace("-", string.Empty), (string) "UNKNOWN_SID_64"};
-            
+
             for (long mainArrayIndex = 0, subArrayIndex = 0; mainArrayIndex < sidbase.Length; subArrayIndex = 0, mainArrayIndex++)
             {
                 if (sidbase[mainArrayIndex] != (byte)bytesToDecode[subArrayIndex])
@@ -40,7 +46,7 @@ namespace lookupSID
 
 
                 // Scan for the rest of the bytes
-                while (subArrayIndex < 8 && sidbase[mainArrayIndex] == (byte)bytesToDecode[subArrayIndex]) // while (subArrayIndex < 8 && sidbase[mainArrayIndex++] == (byte)bytesToDecode[subArrayIndex++]) how the fuck does this behave differently?? I need sleep.
+                while ((subArrayIndex < 8 && mainArrayIndex < sidbase.Length) && sidbase[mainArrayIndex] == (byte)bytesToDecode[subArrayIndex]) // while (subArrayIndex < 8 && sidbase[mainArrayIndex++] == (byte)bytesToDecode[subArrayIndex++]) how the fuck does this behave differently?? I need sleep.
                 {
                     mainArrayIndex++;
                     subArrayIndex++;
@@ -76,7 +82,7 @@ namespace lookupSID
         {
             var sidbasePath = Directory.GetCurrentDirectory();
             byte[] sidbase;
-
+            mode = false;
 
             if (File.Exists(sidbasePath + @"\sidbase.bin"))
             {
@@ -123,12 +129,28 @@ namespace lookupSID
                 switch (line = Console.ReadLine().Replace(" ", string.Empty))
                 {
                     case var _ when line.Length == 16:
-                        lines.Add(DecodeArray(sidbase, getBytes(line)));
+                        var hash = getBytes(line);
+
+                        foreach (var previousLine in lines)
+                        {
+                            if (((string) previousLine[0]) == BitConverter.ToString(hash).Replace("-", string.Empty))
+                            {
+                                lines.Remove(previousLine);
+                                break;
+                            }
+                        }
+                        
+                        lines.Add(DecodeArray(sidbase, hash));
+                        break;
+
+                    case "!":
+                        mode ^= true;
                         break;
 
 
                     default:
-                        Console.WriteLine(line + $" {line.Length} != 8");
+                        echo("Invalid hash provided; must be 16 characters long (whitespace is stripped and ignored).");
+                        Thread.Sleep(2500);
                         break;
                 }
             }
