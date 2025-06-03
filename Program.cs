@@ -26,6 +26,10 @@ namespace SIDHelper
             {
                 sidbasePath += @"\sid\sidbase.bin";
             }
+            else if (File.Exists(Directory.GetCurrentDirectory() + @"\sid1\sidbase.bin"))
+            {
+                sidbasePath += @"\sid1\sidbase.bin";
+            }
 
 
             if (sidbasePath == string.Empty || !File.Exists(sidbasePath))
