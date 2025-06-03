@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.13.35825.156 d17.13
+VisualStudioVersion = 17.13.35825.156
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lookupSID", "lookupSID.csproj", "{09101B30-DE34-4704-8942-AA0F1FA0F12B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SIDHelper", "SIDHelper.csproj", "{09101B30-DE34-4704-8942-AA0F1FA0F12B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
