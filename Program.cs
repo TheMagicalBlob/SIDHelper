@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection.Emit;
 using System.Text;
 using System.Threading;
 
@@ -14,7 +15,7 @@ namespace SIDHelper
             //#
             //## Search for and load the sidbase.bin
             //#
-            mode = false;
+            mode = true;
             byte[] sidbase;
             var sidbasePath = Directory.GetCurrentDirectory();
 
@@ -35,7 +36,7 @@ namespace SIDHelper
             if (sidbasePath == string.Empty || !File.Exists(sidbasePath))
             {
                 echo ("No valid sidbase.bin in working folder, please provide a valid sidbase path.");
-                sidbasePath = Console.ReadLine().Replace("\"", string.Empty);
+                sidbasePath = read().Replace("\"", string.Empty);
                 
                 if (sidbasePath.ToLower().Remove(2) == "no")
                 {
@@ -47,7 +48,7 @@ namespace SIDHelper
                     {
                         Console.Clear();
                         echo ("Invalid path provided, try again. (or type \"no\" to run in encoder-only mode)");
-                        sidbasePath = Console.ReadLine().Replace("\"", string.Empty);
+                        sidbasePath = read().Replace("\"", string.Empty);
 
                         
                         if (sidbasePath.ToLower().Remove(2) == "no")
@@ -71,16 +72,16 @@ namespace SIDHelper
             if (sidbase == null || sidbase.Length < 24) // not that it would make sense for anyone to use an sidbase with a single sid... or be using this random exe off of my pc.
             {
                 echo("Invalid sidbase provided; Please provide an alternate path.");
-                Console.ReadLine().Replace("\"", string.Empty);
+                read().Replace("\"", string.Empty);
                 Console.Clear();
                 return;
             }
             Console.Clear();
 
-            string currentLine;
+            string inputString;
             var hashLines = new List<string[]>();
             var lookupLines = new List<string[]>();
-            var sidLength = BitConverter.ToInt64(sidbase, 0) * 16;
+            var sidbaseLength = BitConverter.ToInt64(sidbase, 0) * 16;
 
 
             //=====================================\\
@@ -89,59 +90,94 @@ namespace SIDHelper
             #region [Main Input & Display Loop]
             while (true)
             {
+                Console.Clear();
+                inputString = string.Empty;
+
                 //#
                 //## Encode provided strings
                 //#
                 if ((bool)mode)
                 {
-                    Console.Clear();
-                    echo("Encoded SIDs:");
+                    // Update console display
+                    if (hashLines.Count > 0)
+                    {
+                        echo($"#   SID Encoder   # [little | big -> string]\n\nEncoded Strings:");
+                    }
+                    else {
+                        echo($"# SID Encoder #     [little | big -> string]\n\n[No Strings Provided]:");
+                    }
 
                     foreach (var item in hashLines)
                     {
-                        echo($"{item[0]}: {item[1]}");
+                        echo($"{item[0]} -> {item[1]}");
                     }
                     if (hashLines?.Count > 0)
                         echo(null);
 
-                    var inputString = Console.ReadLine();
+
+
+                    // Wait for next input, checking for switches before adding the encoded input if none are detected
+                    inputString = read();
                     if (inputString[0] == '`' && inputString.Length == 2)
                     {
-                        if (mode != null)
+                        //## Switch to the Decoder mode
+                        if (inputString[1] == '1' && mode != null)
                         {
                             mode ^= true;
                         }
+                        
+                        //## Remove the last item in the list
+                        else if (inputString[1] == '!')
+                        {
+                            hashLines.RemoveAt(hashLines.Count - 1);
+                        }
+                        
+                        //## Clear lookupLines Contents & refresh display
+                        else if (inputString.ToLower()[1] == 'c')
+                        {
+                            hashLines.Clear();
+                        }
                         continue;
                     }
-                    hashLines.Add(new[] { $"{EncodeString(inputString)[1]} | {EncodeString(inputString)[0]}", inputString });
+                    hashLines.Add(new[] { $"{EncodeString(inputString)[0]}  |  {EncodeString(inputString)[1]}", inputString });
                 }
                 
                 //#
                 //## Decode provided hashes
                 //#
                 else {
-                    // Clear the Console & Print Current Lines to the Screen
-                    Console.Clear();
-                    echo("Decoded SIDs:");
+                    echo("# SID Decoder # [FNV-1a, 64-bit]\n");
+                    
+                    // Update console display
+                    if (hashLines.Count > 0)
+                    {
+                        echo($"Decoded SIDs:");
+                    }
+                    else {
+                        echo($"[No SIDs Provided]");
+                    }
+
 
                     foreach (var item in lookupLines)
                     {
-                        echo($"{item[0]}: {item[1]}");
+                        echo($"{item[0]} -> {item[1]}");
                     }
                     if (lookupLines?.Count > 0)
                         echo(null);
 
+
+
                     // Wait for / read the next input string
-                    switch (currentLine = Console.ReadLine()?.Replace(" ", string.Empty))
+                    switch (inputString = read()?.Replace(" ", string.Empty))
                     {
                         // Invalid / Empty Inputs
-                        case var _ when currentLine == null || currentLine?.Length == 0:
+                        case var _ when inputString == null || inputString?.Length == 0:
                             break;
 
 
                         // Decode the provided hash
-                        case var _ when currentLine.Length == 16:
-                            var hash = BitConverter.GetBytes(long.Parse(currentLine, System.Globalization.NumberStyles.HexNumber)).Reverse().ToArray();;
+                        case var _ when inputString.Length == 16:
+                            var hash = BitConverter.GetBytes(long.Parse(inputString, System.Globalization.NumberStyles.HexNumber)).Reverse().ToArray();;
 
                             foreach (var previousLine in lookupLines)
                             {
@@ -152,20 +188,24 @@ namespace SIDHelper
                                 }
                             }
                         
-                            lookupLines.Add(DecodeSIDHash(sidbase, sidLength, hash));
+                            lookupLines.Add(DecodeSIDHash(sidbase, sidbaseLength, hash));
+                            break;
+
+                        case var _ when new[] { "cls", "clear" }.Contains(inputString.ToLower()):
+                            lookupLines.Clear();
                             break;
 
 
                         // Handle switches (backtick + option character)
-                        case var _ when currentLine.Length < 3 && currentLine[0] == '`':
+                        case var _ when inputString.Length < 3 && inputString[0] == '`':
                             
                             //## Switch to the Encoder mode
-                            if (currentLine[1] == '1' && mode != null)
+                            if (inputString[1] == '1' && mode != null)
                                 mode ^= true;
 
 
                             //## Remove any invalid / unresolved entries from the lookupList
-                            else if (currentLine[1] == '?')
+                            else if (inputString[1] == '?')
                             {
                                 foreach (var item in lookupLines)
                                 {
@@ -178,17 +218,23 @@ namespace SIDHelper
 
 
                             //## Remove the last item in the list
-                            else if (currentLine[1] == '!')
+                            else if (inputString[1] == '!')
                             {
                                 lookupLines.RemoveAt(lookupLines.Count - 1);
+                            }
+
+                            //## Clear lookupLines Contents & refresh display
+                            else if (inputString.ToLower()[1] == 'c')
+                            {
+                                lookupLines.Clear();
                             }
                             break;
 
 
 
                         default:
-                            echo($"\rUnexpected input \"{currentLine}\" provided; must be either a 16 character/64-bit string of bytes (whitespace is stripped and ignored), or a switch (backtick + character).");
-                            Thread.Sleep(2500);
+                            echo($"\rUnexpected input \"{inputString}\" provided; must be either a 16 character/64-bit string of bytes (whitespace is stripped and ignored), or a switch (backtick + character).");
+                            read();
                             break;
                     }
                 }
@@ -196,12 +242,27 @@ namespace SIDHelper
             #endregion
         }
 
-        
-        private static void echo (object str) => Console.WriteLine(str);
-        private static void read () => Console.ReadLine();
 
 
+        //#
+        //## Variable Declarations
+        //#
         private static bool? mode;
+
+
+        
+        
+        //#
+        //## Function Declarations
+        //#
+
+        /// <summary>
+        /// Echo the string representation of a provided object to the standard output, followed by a newline character
+        /// (or only a newline if not parameters are provided)
+        /// </summary>
+        /// <param name="item"> The object to output the string representation of. </param>
+        private static void echo (object item = null) => Console.WriteLine(item);
+        private static string read () => Console.ReadLine();
 
 
         /// <summary>
@@ -213,7 +274,7 @@ namespace SIDHelper
         /// <exception cref="IndexOutOfRangeException"> Thrown in the event of an invalid string pointer read from the sidbase after the provided hash is located. </exception>
         private static string[] DecodeSIDHash(byte[] sidbase, long sidLength, byte[] bytesToDecode)
         {
-            var ret = new string[] { BitConverter.ToString(bytesToDecode).Replace("-", string.Empty), (string) "UNKNOWN_SID_64"};
+            var ret = new string[] { BitConverter.ToString(bytesToDecode).Replace("-", string.Empty), "UNKNOWN_SID_64"};
             
             if (bytesToDecode.Length == 8)
             {
@@ -269,10 +330,11 @@ namespace SIDHelper
         /// <summary>
         /// Attempt to decode the string representation of a provided 64-bit FNV-1a hash via a provided lookup file (sidbase.bin)
         /// </summary>
-        /// <param name="sidbase"></param>
-        /// <param name="sidLength"></param>
-        /// <param name="stringToDecode"></param>
+        /// <param name="sidbase"> The loaded lookup table. </param>
+        /// <param name="sidLength">  </param>
+        /// <param name="stringToDecode"> The big-endian string representation of a 64-bit FNV 1a hash to decode. </param>
         /// <returns></returns>
+        /// <exception cref="IndexOutOfRangeException"> Thrown in the event of an invalid string pointer read from the sidbase after the provided hash is located. </exception>
         private static string[] DecodeSIDHash(byte[] sidbase, long sidLength, string stringToDecode) => DecodeSIDHash(sidbase, sidLength, BitConverter.GetBytes(long.Parse(stringToDecode, System.Globalization.NumberStyles.HexNumber)).Reverse().ToArray());
 
 
@@ -293,10 +355,10 @@ namespace SIDHelper
                     hash ^= character;
                     hash *= prime;
                 }
-                return new string[] { hash.ToString("X").PadLeft(16, '0').PadRight(16, '0'), BitConverter.ToInt64(BitConverter.GetBytes(hash).Reverse().ToArray(), 0).ToString("X").PadLeft(16, '0').PadRight(16, '0') };
+                return new[] { BitConverter.ToInt64(BitConverter.GetBytes(hash).Reverse().ToArray(), 0).ToString("X").PadLeft(16, '0').PadRight(16, '0'), hash.ToString("X").PadLeft(16, '0').PadRight(16, '0') };
             }
 
-            return new string [] { "INVALID_SID_64", string.Empty };
+            return new[] { "INVALID_SID_64", string.Empty };
         }
     }
 }
