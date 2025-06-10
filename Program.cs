@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
@@ -15,7 +16,7 @@ namespace SIDHelper
             //#
             //## Search for and load the sidbase.bin
             //#
-            mode = true;
+            mode = "ENCODE";
             byte[] sidbase;
             var sidbasePath = Directory.GetCurrentDirectory();
 
@@ -88,15 +89,16 @@ namespace SIDHelper
             //--|   Main Input & Display Loop   |--\\
             //=====================================\\
             #region [Main Input & Display Loop]
-            while (true)
-            {
+            while (true) {
+                start:
                 Console.Clear();
-                inputString = string.Empty;
+
+
 
                 //#
                 //## Encode provided strings
                 //#
-                if ((bool)mode)
+                if (mode == "ENCODE")
                 {
                     // Update console display
                     if (hashLines.Count > 0)
@@ -116,14 +118,39 @@ namespace SIDHelper
 
 
 
-                    // Wait for next input, checking for switches before adding the encoded input if none are detected
-                    inputString = read();
-                    if (inputString[0] == '`' && inputString.Length == 2)
+                    // Wait for next input
+                    do {
+                        inputString = read();
+                    }
+                    while (inputString?.Length <1);
+
+                    // Check for switches/other miscellaneous commands before adding the encoded input if no switches were provided
+                    if (new[] { "cls", "clear" }.Contains(inputString))
+                    {
+                        Console.Write($"possible clear command \"{inputString}\" provided\nClear Screen and encoded id's?\n[y/n]: ");
+                        while (true)
+                        {
+                            var key = Console.ReadKey().Key;
+                            if (key == ConsoleKey.Y)
+                            {
+                                hashLines.Clear();
+                                goto start;
+                            }
+                            else if (key == ConsoleKey.N)
+                            {
+                                break;
+                            }
+
+                        }
+                    }
+
+                    // Handle switches (backtick + option character)
+                    else if (inputString[0] == '`' && inputString.Length == 2)
                     {
                         //## Switch to the Decoder mode
                         if (inputString[1] == '1' && mode != null)
                         {
-                            mode ^= true;
+                            mode = "DECODE";
                         }
                         
                         //## Remove the last item in the list
@@ -139,17 +166,24 @@ namespace SIDHelper
                         }
                         continue;
                     }
+
+
+
+                    // Append the encoded version of the provided string to the hashLines list.
                     hashLines.Add(new[] { $"{EncodeString(inputString)[0]}  |  {EncodeString(inputString)[1]}", inputString });
                 }
                 
+
+
+
                 //#
                 //## Decode provided hashes
                 //#
-                else {
+                else if (mode == "DECODE") {
                     echo("# SID Decoder # [FNV-1a, 64-bit]\n");
                     
                     // Update console display
-                    if (hashLines.Count > 0)
+                    if (lookupLines.Count > 0)
                     {
                         echo($"Decoded SIDs:");
                     }
@@ -201,7 +235,7 @@ namespace SIDHelper
                             
                             //## Switch to the Encoder mode
                             if (inputString[1] == '1' && mode != null)
-                                mode ^= true;
+                                mode = "ENCODE";
 
 
                             //## Remove any invalid / unresolved entries from the lookupList
@@ -238,6 +272,9 @@ namespace SIDHelper
                             break;
                     }
                 }
+                else {
+                    echo ($"unexpected mode \"{mode ?? "null"}\" provided- switching to encoder (fix your fucking code, dipshit)");
+                }
             }
             #endregion
         }
@@ -247,7 +284,7 @@ namespace SIDHelper
         //#
         //## Variable Declarations
         //#
-        private static bool? mode;
+        private static string mode;
 
 
         
