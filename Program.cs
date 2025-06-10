@@ -211,7 +211,7 @@ namespace SIDHelper
 
                         // Decode the provided hash
                         case var _ when inputString.Length == 16:
-                            var hash = BitConverter.GetBytes(long.Parse(inputString, System.Globalization.NumberStyles.HexNumber)).Reverse().ToArray();;
+                            var hash = BitConverter.GetBytes(long.Parse(inputString, System.Globalization.NumberStyles.HexNumber)).Reverse().ToArray();
 
                             foreach (var previousLine in lookupLines)
                             {
@@ -221,6 +221,7 @@ namespace SIDHelper
                                     break;
                                 }
                             }
+                            
                         
                             lookupLines.Add(DecodeSIDHash(sidbase, sidbaseLength, hash));
                             break;
@@ -241,12 +242,14 @@ namespace SIDHelper
                             //## Remove any invalid / unresolved entries from the lookupList
                             else if (inputString[1] == '?')
                             {
-                                foreach (var item in lookupLines)
+                                for (int i = 0; i < lookupLines.Count; )
                                 {
+                                    var item = lookupLines[i];
                                     if (item[1] == "UNKNOWN_SID_64" || item[1] == "INVALID_SID_64")
                                     {
                                         lookupLines.Remove(item);
                                     }
+                                    else ++i;
                                 }
                             }
 
