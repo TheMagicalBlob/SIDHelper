@@ -11,86 +11,102 @@ namespace SIDHelper
         static void Main(string[] args)
         {
             //#
-            //## Search for and load the sidbase.bin
+            //## VARIABLE DECLARATIONS
             //#
             mode = "ENCODE";
-            byte[] sidbase;
+
             var sidbasePath = Directory.GetCurrentDirectory();
-
-            if (File.Exists(sidbasePath + @"\sidbase.bin"))
-            {
-                sidbasePath += @"\sidbase.bin";
-            }
-            else if (File.Exists(Directory.GetCurrentDirectory() + @"\sid\sidbase.bin"))
-            {
-                sidbasePath += @"\sid\sidbase.bin";
-            }
-            else if (File.Exists(Directory.GetCurrentDirectory() + @"\sid1\sidbase.bin"))
-            {
-                sidbasePath += @"\sid1\sidbase.bin";
-            }
+            
+            
+            ulong hashTableRawLength;
+            
+            byte[]
+                rawSidbase,
+                sidbaseHashTable,
+                sidbaseRawStringTable
+            ;
+            
 
 
-            if (sidbasePath == string.Empty || !File.Exists(sidbasePath))
+            //#
+            //## Search for and load the sidbase.bin
+            //#
+            new[] { @"\sidbase.bin", @"\sid\sidbase.bin", @"\sid1\sidbase.bin", @"\..\sidbase.bin" }
+            .Any(path =>
             {
-                echo ("No valid sidbase.bin in working folder, please provide a valid sidbase path.");
-                sidbasePath = read().Replace("\"", string.Empty);
-                
-                if (sidbasePath.ToLower().Remove(2) == "no")
+                if (File.Exists(sidbasePath + path))
                 {
-                    sidbasePath = string.Empty;
+                    sidbasePath += path;
+                    return true;
                 }
-                // Repeatedly ask for a valid path until one's provided
-                else {
-                    while (!File.Exists(sidbasePath))
-                    {
-                        Console.Clear();
-                        echo ("Invalid path provided, try again. (or type \"no\" to run in encoder-only mode)");
-                        sidbasePath = read().Replace("\"", string.Empty);
+                else
+                    return false;
+            });
 
-                        
-                        if (sidbasePath.ToLower().Remove(2) == "no")
-                        {
-                            sidbasePath = string.Empty;
-                            mode = null;
-                            break;
-                        }
-                    }
+
+            if (sidbasePath == Directory.GetCurrentDirectory() || !File.Exists(sidbasePath))
+            {
+                echo ("No valid sidbase.bin in working folder, please provide a valid sidbase path.\nNew path: ");
+                
+                //if (sidbasePath.ToLower().Remove(2) == "no") // switch to encoder-only mode (why did I implement it this way??)
+                //{
+                //    sidbasePath = string.Empty;
+                //}
+                // Repeatedly ask for a valid path until one's provided
+                while (!File.Exists(sidbasePath = read().Replace("\"", string.Empty)))
+                {
+                    Console.Clear();
+                    echo ("Invalid path provided, try again.");
+                    //echo ("Invalid path provided, try again. (or type \"no\" to run in encoder-only mode)");
+                    sidbasePath = read().Replace("\"", string.Empty);
                 }
             }
 
 
 
 
-            // Load the string id base in to memory for quicker scanning
+            // Load the string id base in to memory for scanning
             Console.Clear();
             echo ("Loading sidbase...");
-            sidbase = File.ReadAllBytes(sidbasePath);
 
-            if (sidbase == null || sidbase.Length < 24) // not that it would make sense for anyone to use an sidbase with a single sid... or be using this random exe off of my pc.
+        retry:
+            rawSidbase = File.ReadAllBytes(sidbasePath);
+            if (rawSidbase.Length < 24) // not that it would make sense for anyone to use an sidbase with a single sid... or be using this random exe off of my pc.
             {
-                echo("Invalid sidbase provided; Please provide an alternate path.");
-                read().Replace("\"", string.Empty);
+                echo($"Invalid sidbase provided ({nameof(rawSidbase)}.Length < 24); Please provide an alternate path.");
+
+                sidbasePath = read().Replace("\"", string.Empty);
+                    
                 Console.Clear();
-                return;
+                goto retry;
             }
+
+            // Read the table length to get the expected size of the hash table (don't really need it anymore)
+            hashTableRawLength = BitConverter.ToUInt64(rawSidbase, 0) * 16;
+
+            // Initialize the hash/string tables, and read them from the active sidbase
+            //sidbaseHashTable = ReadBytes(rawSidbase, 8, (int) hashTableRawLength);
+            //sidbaseRawStringTable = ReadBytes(rawSidbase, sidbaseHashTable.Length + 8, rawSidbase.Length - (int) (hashTableRawLength + 8));
+            Buffer.BlockCopy(rawSidbase, 8, sidbaseHashTable = new byte[hashTableRawLength], 0, (int) hashTableRawLength); //! these conversions could easily be an issue...
+            Buffer.BlockCopy(rawSidbase, sidbaseHashTable.Length + 8, sidbaseRawStringTable = new byte[rawSidbase.Length - (int) (hashTableRawLength + 8)], 0, (int) rawSidbase.Length - (int) hashTableRawLength - 8);
+
             Console.Clear();
 
             string inputString;
             var hashLines = new List<string[]>();
             var lookupLines = new List<string[]>();
-            var sidbaseLength = BitConverter.ToInt64(sidbase, 0) * 16;
+
+
 
 
             //=====================================\\
             //--|   Main Input & Display Loop   |--\\
             //=====================================\\
             #region [Main Input & Display Loop]
-            while (true) {
+            while (true)
+            {
                 start:
                 Console.Clear();
-
-
 
                 //#
                 //## Encode provided strings
@@ -119,10 +135,11 @@ namespace SIDHelper
                     do {
                         inputString = read();
                     }
-                    while (inputString?.Length <1);
+                    while (inputString?.Length < 1);
+
 
                     // Check for switches/other miscellaneous commands before adding the encoded input if no switches were provided
-                    if (new[] { "cls", "clear" }.Contains(inputString))
+                    if (new[] { "cls", "clear" }.Contains(inputString.ToLower()))
                     {
                         Console.Write($"possible clear command \"{inputString}\" provided\nClear Screen and encoded id's?\n[y/n]: ");
                         while (true)
@@ -145,7 +162,7 @@ namespace SIDHelper
                     else if (inputString[0] == '`' && inputString.Length == 2)
                     {
                         //## Switch to the Decoder mode
-                        if (inputString[1] == '1' && mode != null)
+                        if (inputString[1] == '1' || inputString[1] == '`' && mode != null)
                         {
                             mode = "DECODE";
                         }
@@ -176,7 +193,8 @@ namespace SIDHelper
                 //#
                 //## Decode provided hashes
                 //#
-                else if (mode == "DECODE") {
+                else if (mode == "DECODE")
+                {
                     echo("# SID Decoder # [FNV-1a, 64-bit]\n");
                     
                     // Update console display
@@ -220,7 +238,7 @@ namespace SIDHelper
                             }
                             
                         
-                            lookupLines.Add(DecodeSIDHash(sidbase, sidbaseLength, hash));
+                            lookupLines.Add(New_DecodeSIDHash(sidbaseHashTable, sidbaseRawStringTable, hashTableRawLength, hash));
                             break;
 
                         case var _ when new[] { "cls", "clear" }.Contains(inputString.ToLower()):
@@ -267,8 +285,8 @@ namespace SIDHelper
 
 
                         default:
-                            echo($"\rUnexpected input \"{inputString}\" provided; must be either a 16 character/64-bit string of bytes (whitespace is stripped and ignored), or a switch (backtick + character).");
-                            read();
+                            echo($"\r\t\nUnexpected input \"{inputString}\" provided; must be either a 16 character/64-bit string of bytes (whitespace is stripped and ignored), or a switch (backtick + character).");
+                            System.Threading.Thread.Sleep(1133);
                             break;
                     }
                 }
@@ -281,13 +299,14 @@ namespace SIDHelper
 
 
 
+
         //#
         //## Variable Declarations
         //#
         private static string mode;
 
-
         
+
         
         //#
         //## Function Declarations
@@ -300,8 +319,181 @@ namespace SIDHelper
         /// <param name="item"> The object to output the string representation of. </param>
         private static void echo (object item = null) => Console.WriteLine(item);
         private static string read () => Console.ReadLine();
+        private static void exit (bool isError = false) => Environment.Exit(isError ? 1 : 0);
+
+        private static byte[] ReadBytes(byte[] array, int index, int length)
+        {
+            var ret = new byte[length];
+            for (int i = 0; i < length; i++)
+            {
+                ret[i] = array[index + i];
+            }
+            return ret;
+        }
+        
 
 
+
+        /// <summary>
+        /// Encode an <paramref name="inputString"/> as a 64-bit FNV-1a hash, and return the string representation of said hash in both endians
+        /// </summary>
+        /// <param name="inputString"> The string to encode. </param>
+        /// <returns> A string[] containing the hashed string in both endians. </returns>
+        private static string[] EncodeString(string inputString)
+        {
+            if (inputString?.Length > 0)
+            {
+                // Hash input string
+                var hash = 14695981039346656037ul;
+                var prime = 1099511628211ul;
+                var inputLen = inputString.Length;
+                
+                for (int i = 0; i < inputLen; i++)
+                {
+                    hash ^= inputString[i];
+                    hash *= prime;
+                }
+                return new[] { BitConverter.ToInt64(BitConverter.GetBytes(hash).Reverse().ToArray(), 0).ToString("X").PadLeft(16, '0').PadRight(16, '0'), hash.ToString("X").PadLeft(16, '0').PadRight(16, '0') };
+            }
+
+            return new[] { "INVALID_SID_64", string.Empty };
+        }
+
+        
+        /// <summary>
+        /// Attempt to decode a provided 64-bit FNV-1a hash via a provided lookup file (sidbase.bin)
+        /// </summary>
+        /// <param name="hashTable"> The loaded hash lookup table. </param>
+        /// <param name="stringTable"> The loaded string table. </param>
+        /// <param name="hashTableRawLength">  </param>
+        /// <param name="bytesToDecode"> The hash to decode, as an array of bytes </param>
+        /// <returns></returns>
+        /// <exception cref="IndexOutOfRangeException"> Thrown in the event of an invalid string pointer read from the sidbase after the provided hash is located. </exception>
+        private static string[] New_DecodeSIDHash(byte[] hashTable, byte[] stringTable, ulong hashTableRawLength, byte[] bytesToDecode)
+        {
+            #if DEBUG
+            bool addressError(ulong scanAddress)
+            {
+                decimal chk;
+                return scanAddress > hashTableRawLength - 0x10 || scanAddress < 0 || (chk = ((decimal) scanAddress) / 16) != decimal.Round(chk);
+            }
+            #endif
+
+            
+            var ret = new[]
+            {
+                BitConverter.ToString(bytesToDecode).Replace("-", string.Empty),
+                "UNKNOWN_SID_64"
+            };
+
+            if (bytesToDecode.Length == 8)
+            {
+                var expectedHash = BitConverter.ToUInt64(bytesToDecode, 0);
+                
+                ulong
+                    currentHash,
+                    scanAddress,
+                    currentRange
+                ;
+
+                scanAddress = currentRange = hashTableRawLength / 2;
+
+                // check whether or not the chunk can be evenly split; if not, check
+                // the odd one out for the expected hash, then exclude it and continue as normal if it isn't a match.
+                if (((hashTableRawLength >> 4) & 1) == 1)
+                {
+                    scanAddress = currentRange -= 8;
+
+                    var checkedHash = BitConverter.ToUInt64(hashTable, (int) hashTableRawLength - 16);
+                    if (checkedHash == expectedHash)
+                    {
+                        scanAddress = hashTableRawLength;
+                        goto readString;
+                    }
+                }
+
+                while (true)
+                {
+                    // check for uneven split again
+                    if (((scanAddress >> 4) & 1) == 1)
+                    {
+                        scanAddress -= 0x10;
+
+                        var checkedHash = BitConverter.ToUInt64(hashTable, (int) scanAddress);
+                        if (checkedHash == expectedHash)
+                        {
+                            break;
+                        }
+                    } 
+                    if (((currentRange >> 4) & 1) == 1)
+                    {
+                        currentRange -= 0x10;
+                    }
+
+
+                    #if DEBUG
+                    // Make sure we haven't reached the end of the collection (or somehow gone negative),
+                    // as well as ensure the offset's still aligned (to the best of my abilities at least- without just clunkily reading it as a string
+                    if (addressError(scanAddress))
+                    {
+                        echo($"\nFuck.\n    {nameof(currentRange)}: 0x{currentRange:X}\n    {nameof(scanAddress)}: 0x{scanAddress:X}\n    {nameof(hashTableRawLength)}: 0x{hashTableRawLength:X}");
+                        read();
+                        return ret;
+                    }
+                    #endif
+                    
+
+                    
+                    currentHash = BitConverter.ToUInt64(hashTable, (int)scanAddress);
+
+                    if (expectedHash < currentHash)
+                    {
+                        scanAddress -= currentRange / 2;
+                        currentRange /= 2;
+                    }
+                    else if (expectedHash > currentHash)
+                    {
+                        scanAddress += currentRange / 2;
+                    }
+                    else
+                        break;
+                }
+
+
+
+
+                // Read the string pointer
+                readString:
+                var stringPtr = (int) BitConverter.ToInt64(hashTable, (int)(scanAddress + 8)) - ((uint) hashTableRawLength + 8);
+
+                if (stringPtr >= stringTable.Length)
+                {
+                    throw new IndexOutOfRangeException($"ERROR: Invalid Pointer Read for String Data!\n    str* 0x{stringPtr:X} >= len 0x{hashTable.Length + stringTable.Length + 8:X}.");
+                }
+
+
+                // Parse and add the string to the array
+                var stringBuffer = string.Empty;
+
+                while (stringTable[stringPtr] != 0)
+                {
+                    stringBuffer += Encoding.UTF8.GetString(stringTable, (int)stringPtr++, 1);
+                }
+
+                
+                ret[1] = stringBuffer;
+            }
+            else {
+                echo($"Invalid SID provided; unexpected length of \"{bytesToDecode?.Length ?? 0}\". Must be 8 bytes.");
+                ret[1] = "INVALID_SID_64";
+            }
+
+            return ret;
+        }
+
+
+
+        /*// private static string[] Original_DecodeSIDHash(byte[] sidbase, long sidLength, byte[] bytesToDecode)
         /// <summary>
         /// Attempt to decode a provided 64-bit FNV-1a hash via a provided lookup file (sidbase.bin)
         /// </summary>
@@ -309,7 +501,7 @@ namespace SIDHelper
         /// <param name="bytesToDecode"> The hash to decode, as an array of bytes </param>
         /// <returns></returns>
         /// <exception cref="IndexOutOfRangeException"> Thrown in the event of an invalid string pointer read from the sidbase after the provided hash is located. </exception>
-        private static string[] DecodeSIDHash(byte[] sidbase, long sidLength, byte[] bytesToDecode)
+        private static string[] Original_DecodeSIDHash(byte[] sidbase, long sidLength, byte[] bytesToDecode)
         {
             var ret = new string[] { BitConverter.ToString(bytesToDecode).Replace("-", string.Empty), "UNKNOWN_SID_64"};
             
@@ -337,7 +529,7 @@ namespace SIDHelper
                 
 
                     // Read the string pointer
-                    var stringPtr = BitConverter.ToInt64(sidbase, (int)(mainArrayIndex + subArrayIndex));
+                    var stringPtr = BitConverter.ToInt64(sidbase, (int)(mainArrayIndex + 8));
                     if (stringPtr >= sidbase.Length)
                     {
                         throw new IndexOutOfRangeException($"ERROR: Invalid Pointer Read for String Data!\n    str* 0x{stringPtr:X} >= len 0x{sidbase.Length:X}.");
@@ -363,39 +555,6 @@ namespace SIDHelper
 
             return ret;
         }
-
-        /// <summary>
-        /// Attempt to decode the string representation of a provided 64-bit FNV-1a hash via a provided lookup file (sidbase.bin)
-        /// </summary>
-        /// <param name="sidbase"> The loaded lookup table. </param>
-        /// <param name="sidLength">  </param>
-        /// <param name="stringToDecode"> The big-endian string representation of a 64-bit FNV 1a hash to decode. </param>
-        /// <returns></returns>
-        /// <exception cref="IndexOutOfRangeException"> Thrown in the event of an invalid string pointer read from the sidbase after the provided hash is located. </exception>
-        private static string[] DecodeSIDHash(byte[] sidbase, long sidLength, string stringToDecode) => DecodeSIDHash(sidbase, sidLength, BitConverter.GetBytes(long.Parse(stringToDecode, System.Globalization.NumberStyles.HexNumber)).Reverse().ToArray());
-
-
-        /// <summary>
-        /// Encode an <paramref name="inputString"/> as a 64-bit FNV-1a hash, and return the string representation of said hash in both endians
-        /// </summary>
-        /// <param name="inputString"> The string to encode. </param>
-        /// <returns> A string[] containing the hashed string in both endians. </returns>
-        private static string[] EncodeString(string inputString)
-        {
-            if (inputString?.Length > 0)
-            {
-                // Hash input string
-                ulong hash = 14695981039346656037;
-                ulong prime = 1099511628211;
-                foreach (char character in inputString)
-                {
-                    hash ^= character;
-                    hash *= prime;
-                }
-                return new[] { BitConverter.ToInt64(BitConverter.GetBytes(hash).Reverse().ToArray(), 0).ToString("X").PadLeft(16, '0').PadRight(16, '0'), hash.ToString("X").PadLeft(16, '0').PadRight(16, '0') };
-            }
-
-            return new[] { "INVALID_SID_64", string.Empty };
-        }
+        */
     }
 }
