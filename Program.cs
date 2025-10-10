@@ -57,6 +57,7 @@ namespace SIDHelper
             }
 
 
+
             // Check the sidbase path before proceeding.
             if (sidbasePath == Directory.GetCurrentDirectory() || !File.Exists(sidbasePath))
             {
@@ -94,7 +95,8 @@ namespace SIDHelper
 
         retry:
             wholeSidbase = File.ReadAllBytes(sidbasePath);
-            if (wholeSidbase.Length < 24) // not that it would make sense for anyone to use an sidbase with a single sid... or be using this random exe off of my pc.
+
+            if (wholeSidbase.Length < 24) // not that it would make sense for anyone to use an sidbase with a single sid... or be using this random sack 'o shit app.
             {
                 echo($"Invalid sidbase provided ({nameof(wholeSidbase)}.Length < 24); Please provide an alternate path.");
 
@@ -143,10 +145,10 @@ namespace SIDHelper
                     // Update console display
                     if (hashLines.Count > 0)
                     {
-                        echo($"#  SID Encoder  # [little | big -> string]\n\nEncoded Strings:");
+                        echo($"#  SID Encoder  # [little | big -> string] (swap modes with `1 or ``)\n\nEncoded Strings:");
                     }
                     else {
-                        echo($"#  SID Encoder  # [little | big -> string]\n\n[No Strings Provided]:");
+                        echo($"#  SID Encoder  # [little | big -> string] (swap modes with `1 or ``)\n\n[No Strings Provided]:");
                     }
 
                     foreach (var item in hashLines)
