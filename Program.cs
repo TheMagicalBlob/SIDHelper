@@ -37,17 +37,24 @@ namespace SIDHelper
             //#
             //## Search for and load the sidbase.bin
             //#
-            new[] { @"\sidbase.bin", @"\sid\sidbase.bin", @"\sid1\sidbase.bin", @"\..\sidbase.bin" }
-            .Any(path =>
+            if (args != null && args.Length > 0 && args[0].Length > 3 && File.Exists(args[0]))
             {
-                if (File.Exists(sidbasePath + path))
+                sidbasePath = args[0];
+            }
+            else
+            {
+                new[] { @"\sidbase.bin", @"\sid\sidbase.bin", @"\sid1\sidbase.bin", @"\..\sidbase.bin" }
+                .Any(path =>
                 {
-                    sidbasePath += path;
-                    return true;
-                }
-                else
-                    return false;
-            });
+                    if (File.Exists(sidbasePath + path))
+                    {
+                        sidbasePath += path;
+                        return true;
+                    }
+                    else
+                        return false;
+                });
+            }
 
 
             // Check the sidbase path before proceeding.
