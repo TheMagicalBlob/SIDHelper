@@ -18,7 +18,7 @@ namespace SIDHelper
 
             var sidbasePath = Directory.GetCurrentDirectory();
             
-            int hashTableRawLength;
+            int fullHashTableLength;
             
             byte[]
                 wholeSidbase,
@@ -30,6 +30,7 @@ namespace SIDHelper
             var lookupLines = new List<string[]>();
 
             string inputString;
+
 
 
 
@@ -93,6 +94,7 @@ namespace SIDHelper
             echo ("Loading sidbase...");
 
 
+
         retry:
             wholeSidbase = File.ReadAllBytes(sidbasePath);
 
@@ -112,19 +114,19 @@ namespace SIDHelper
             if (check >= int.MaxValue)
             {
                 Console.Clear();
-                echo($"ERROR: Sidbase is too large for 64-bit addresses, blame Microsoft for limiting me to that, then blame me for not bothering to try splitting the sidbases.");
+                echo($"ERROR: Sidbase is too large for 64-bit addresses, blame Microsoft for limiting me to that, then blame me for not bothering to try splitting the sidbases.\n{check} >= {int.MaxValue}");
                 
                 echo($"\n[Press Any Button to Close the Application.]");
                 read();
             }
 
-            hashTableRawLength = (int) BitConverter.ToInt64(wholeSidbase, 0) * 16;
+            fullHashTableLength = (int) BitConverter.ToInt64(wholeSidbase, 0) * 16;
 
             // Initialize the hash/string tables, and read them from the active sidbase
-            sidbaseRawHashTable   = ReadBytes(wholeSidbase, 8, (int)hashTableRawLength);
-            sidbaseRawStringTable = ReadBytes(wholeSidbase, sidbaseRawHashTable.Length + 8, wholeSidbase.Length - (int) (hashTableRawLength + 8));
-            
-            
+            sidbaseRawHashTable   = ReadBytes(wholeSidbase, 8, (int)fullHashTableLength);
+            sidbaseRawStringTable = ReadBytes(wholeSidbase, sidbaseRawHashTable.Length + 8, wholeSidbase.Length - (int) (fullHashTableLength + 8));
+
+
 
 
             //=====================================\\
@@ -148,9 +150,9 @@ namespace SIDHelper
                         echo($"#  SID Encoder  # [little | big -> string] (swap modes with `1 or ``)\n\nEncoded Strings:");
                     }
                     else {
-                        echo($"#  SID Encoder  # [little | big -> string] (swap modes with `1 or ``)\n\n[No Strings Provided]:");
+                        echo($"#    SID Encoder    # [little | big -> string] (swap modes with `1 or ``)\n\n[No Strings Provided]:");
                     }
-
+                    
                     foreach (var item in hashLines)
                     {
                         echo($"{item[0]} -> {item[1]}");
@@ -224,7 +226,7 @@ namespace SIDHelper
                 //#
                 else if (mode == "DECODE")
                 {
-                    echo("# SID Decoder # [FNV-1a, 64-bit]\n");
+                    echo("# SID Decoder # [FNV-1a, 64-bit] (swap modes with `1 or ``)\n");
                     
                     // Update console display
                     if (lookupLines.Count > 0)
@@ -255,19 +257,19 @@ namespace SIDHelper
 
                         // Decode the provided hash
                         case var _ when inputString.Length == 16:
-                            var hash = BitConverter.GetBytes(long.Parse(inputString, System.Globalization.NumberStyles.HexNumber)).Reverse().ToArray();
+                            var rawHash = BitConverter.GetBytes(long.Parse(inputString, System.Globalization.NumberStyles.HexNumber)).Reverse().ToArray();
 
                             foreach (var previousLine in lookupLines)
                             {
-                                if (previousLine[0] == BitConverter.ToString(hash).Replace("-", string.Empty))
+                                if (previousLine[0] == BitConverter.ToString(rawHash).Replace("-", string.Empty))
                                 {
                                     lookupLines.Remove(previousLine);
                                     break;
                                 }
                             }
                             
-                        
-                            lookupLines.Add(DecodeSIDHash(sidbaseRawHashTable, sidbaseRawStringTable, hashTableRawLength, hash));
+                            lookupLines.Add(DecodeSIDHash(sidbaseRawHashTable, sidbaseRawStringTable, fullHashTableLength, rawHash));
+                            
                             break;
 
 
@@ -290,7 +292,7 @@ namespace SIDHelper
                             //## Remove any invalid / unresolved entries from the lookupList
                             else if (inputString[1] == '?')
                             {
-                                for (int i = 0; i < lookupLines.Count; )
+                                for (var i = 0; i < lookupLines.Count; )
                                 {
                                     var item = lookupLines[i];
                                     if (item[1] == "UNKNOWN_SID_64" || item[1] == "INVALID_SID_64")
@@ -372,10 +374,9 @@ namespace SIDHelper
         private static byte[] ReadBytes(byte[] array, int index, int length)
         {
             var ret = new byte[length];
-            for (; length > 0; length--) // wooo we go backwards 'cause I'm gonna pretend that creating one less variable will actually help
-            {
-                ret[length - 1] = array[index + (length - 1)];
-            }
+
+            // wooo we go backwards 'cause I'm gonna pretend that creating one less variable will actually help
+            for (; length > 0; ret[length - 1] = array[index + (length-- - 1)]);
             return ret;
         }
         
@@ -425,6 +426,11 @@ namespace SIDHelper
                 "UNKNOWN_SID_64"
             };
 
+            if (bytesToDecode.Sum(@byte => @byte) == 0)
+            {
+                echo($"Null SID provided.");
+                ret[1] = "(null sid)";
+            }
             if (bytesToDecode.Length == 8)
             {
                 ulong
@@ -547,10 +553,8 @@ namespace SIDHelper
         /// <param name="bytesToDecode"> The hash to decode, as an array of bytes </param>
         /// <returns></returns>
         /// <exception cref="IndexOutOfRangeException"> Thrown in the event of an invalid string pointer read from the sidbase after the provided hash is located. </exception>
-        private static string[] Old_DecodeSIDHash(byte[] sidbase, int fullHashTableLength, byte[] bytesToDecode)
+        private static string Old_DecodeSIDHash(byte[] sidbase, int fullHashTableLength, byte[] bytesToDecode)
         {
-            var ret = new string[] { BitConverter.ToString(bytesToDecode).Replace("-", string.Empty), "UNKNOWN_SID_64"};
-            
             if (bytesToDecode.Length == 8)
             {
                 for (int mainArrayIndex = 0, subArrayIndex = 0; mainArrayIndex < fullHashTableLength; subArrayIndex = 0, mainArrayIndex+=8)
@@ -594,15 +598,15 @@ namespace SIDHelper
                     }
 
                 
-                    ret[1] = stringBuffer;
+                    return stringBuffer;
                 }
+                
+                return "UNKNOWN_SID_64";
             }
             else {
                 echo($"Invalid SID provided; unexpected length of \"{bytesToDecode?.Length ?? 0}\". Must be 8 bytes.");
-                ret[1] = "INVALID_SID_64";
+                return "INVALID_SID_64";
             }
-
-            return ret;
         }
     }
 }
