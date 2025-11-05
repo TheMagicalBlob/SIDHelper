@@ -431,7 +431,7 @@ namespace SIDHelper
                 echo($"Null SID provided.");
                 ret[1] = "(null sid)";
             }
-            if (bytesToDecode.Length == 8)
+            else if (bytesToDecode.Length == 8)
             {
                 ulong
                     currentHash,
